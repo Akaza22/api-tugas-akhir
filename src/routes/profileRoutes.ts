@@ -10,9 +10,9 @@ import { authMiddleware } from '../middlewares/auth';
 import { validate } from '../middlewares/validation';
 import { body } from 'express-validator';
 import multer from 'multer';
+import { avatarStorage } from '../utils/cloudinary';
 
-
-const upload = multer({ dest: 'uploads/avatars/' });
+const upload = multer({ storage: avatarStorage });
 
 const router = Router();
 

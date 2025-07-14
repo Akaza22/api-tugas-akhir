@@ -3,8 +3,7 @@ import { User } from '../models';
 import { controllerHandler } from '../utils/controllerHandler';
 import { success, error } from '../utils/response';
 import bcrypt from 'bcrypt';
-import fs from 'fs';
-import path from 'path';
+
 
 export const getProfile = controllerHandler(async (req, res) => {
   const user = await User.findByPk(req.user!.id, {
@@ -80,8 +79,8 @@ export const updateUsername = controllerHandler(async (req, res) => {
     await user.update({ username });
     res.json(success('Username updated', { username }));
 });
-  
-  export const updateAvatar = controllerHandler(async (req, res) => {
+
+export const updateAvatar = controllerHandler(async (req, res) => {
     const user = await User.findByPk(req.user!.id);
   
     if (!user) {
@@ -89,24 +88,17 @@ export const updateUsername = controllerHandler(async (req, res) => {
       return;
     }
   
-    const file = req.file;
-    if (!file) {
+    const file = req.file as Express.Multer.File;
+  
+    if (!file || !file.path) {
       res.status(400).json(error('No file uploaded', null, 400));
       return;
     }
   
-    const allowedTypes = ['image/jpeg', 'image/png'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      fs.unlinkSync(file.path); // delete invalid file
-      res.status(400).json(error('Invalid file type (only JPG/PNG)', null, 400));
-      return;
-    }
-  
-    // Hapus file lama jika ada
-    if (user.avatar_url && fs.existsSync(user.avatar_url)) {
-      fs.unlinkSync(user.avatar_url);
-    }
+    // Optional: bisa simpan public_id Cloudinary untuk keperluan delete nanti
+    // const publicId = (file as any).filename;
   
     await user.update({ avatar_url: file.path });
+  
     res.json(success('Avatar updated', { avatar_url: file.path }));
 });
