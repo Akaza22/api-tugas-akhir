@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import multer from 'multer';
 import {
   getAllNews,
   getNewsById,
@@ -10,11 +9,10 @@ import {
 import { authMiddleware } from '../middlewares/auth';
 import { validate } from '../middlewares/validation';
 import { body } from 'express-validator';
+import { uploadNewsFiles } from '../middlewares/uploadNewsFiles';
 
 const router = Router();
 
-// Konfigurasi upload file
-const upload = multer({ dest: 'uploads/' });
 
 router.get('/', getAllNews);
 router.get('/:id', getNewsById);
@@ -22,10 +20,9 @@ router.get('/:id', getNewsById);
 router.post(
   '/',
   authMiddleware,
-  upload.fields([{ name: 'banner' }, { name: 'pdf' }]),
+  uploadNewsFiles,
   [
     body('title').notEmpty().withMessage('Title is required')
-    // content & file optional
   ],
   validate,
   createNews
@@ -34,7 +31,7 @@ router.post(
 router.put(
   '/:id',
   authMiddleware,
-  upload.fields([{ name: 'banner' }, { name: 'pdf' }]),
+  uploadNewsFiles,
   [
     body('title').optional().notEmpty().withMessage('Title cannot be empty'),
     body('content').optional()

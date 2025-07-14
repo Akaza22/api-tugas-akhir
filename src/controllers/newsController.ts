@@ -25,17 +25,18 @@ export const createNews = controllerHandler(async (req, res) => {
     return;
   }
 
-  const author_id = req.user.id;
-
-  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-  const bannerFile = files?.['banner']?.[0];
-  const pdfFile = files?.['pdf']?.[0];
+  const files = req.files as {
+    banner?: Express.Multer.File[];
+    pdf?: Express.Multer.File[];
+  };
+  const bannerFile = files.banner?.[0];
+  const pdfFile = files.pdf?.[0];
 
   if (bannerFile && !['image/jpeg', 'image/png'].includes(bannerFile.mimetype)) {
     res.status(400).json(error('Invalid banner format. Only JPG/PNG allowed.'));
     return;
   }
-  
+
   if (pdfFile && pdfFile.mimetype !== 'application/pdf') {
     res.status(400).json(error('Invalid file format. Only PDF allowed.'));
     return;
@@ -44,14 +45,15 @@ export const createNews = controllerHandler(async (req, res) => {
   const news = await NewsArticle.create({
     title,
     content: content || null,
-    pdf_url: pdfFile?.path || null,
-    banner_url: bannerFile?.path || null,
-    summary: null, // bisa diisi nanti oleh TextRank
-    author_id
+    pdf_url: pdfFile?.path ?? null,
+    banner_url: bannerFile?.path ?? null,
+    summary: null,
+    author_id: req.user.id
   });
 
-  res.status(201).json(success('News created', news, 201));
+  res.status(201).json(success('News created', news));
 });
+
 
 export const updateNews = controllerHandler(async (req, res) => {
   const news = await NewsArticle.findByPk(req.params.id);
@@ -61,21 +63,24 @@ export const updateNews = controllerHandler(async (req, res) => {
   }
 
   const { title, content } = req.body;
-  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-  const bannerFile = files?.['banner']?.[0];
-  const pdfFile = files?.['pdf']?.[0];
 
+  const files = req.files as {
+    banner?: Express.Multer.File[];
+    pdf?: Express.Multer.File[];
+  };
+  const bannerFile = files.banner?.[0];
+  const pdfFile = files.pdf?.[0];
 
   if (bannerFile && !['image/jpeg', 'image/png'].includes(bannerFile.mimetype)) {
     res.status(400).json(error('Invalid banner format. Only JPG/PNG allowed.'));
     return;
   }
-  
+
   if (pdfFile && pdfFile.mimetype !== 'application/pdf') {
     res.status(400).json(error('Invalid file format. Only PDF allowed.'));
     return;
   }
-  
+
   await news.update({
     title: title ?? news.title,
     content: content ?? news.content,
