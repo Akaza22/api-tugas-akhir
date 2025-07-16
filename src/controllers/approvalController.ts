@@ -2,53 +2,50 @@ import { Request, Response } from 'express';
 import { controllerHandler } from '../utils/controllerHandler';
 import { NewsApproval, NewsArticle, UserSupervisor } from '../models';
 import { success, error } from '../utils/response';
+import { Op } from 'sequelize';
 
 export const approveNews = controllerHandler(async (req, res) => {
-    const news_id = parseInt(req.params.news_id);
-    const approver_id = req.user?.id;
-  
-    if (!approver_id) {
-      res.status(401).json(error('Unauthorized'));
-      return;
-    }
-  
-    const existingApproval = await NewsApproval.findOne({
-      where: { news_id, approver_id }
-    });
-  
-    if (existingApproval) {
-      res.status(409).json(error('Already approved this news', null, 409));
-      return;
-    }
-  
-    const relation = await UserSupervisor.findOne({
-      where: {
-        employee_id: req.body.author_id,
-        supervisor_id: approver_id
-      }
-    });
-  
-    if (!relation) {
-      res.status(403).json(error('You are not a supervisor for this author', null, 403));
-      return;
-    }
-  
-    const approval = await NewsApproval.create({
+  const news_id = parseInt(req.params.news_id);
+  const approver_id = req.user?.id;
+
+  if (!approver_id) {
+    res.status(401).json(error('Unauthorized'));
+    return;
+  }
+
+  // ✅ Cek apakah user punya hak approval AKTIF
+  const approval = await NewsApproval.findOne({
+    where: {
       news_id,
       approver_id,
-      note: req.body.note || null,
-      weight: relation.weight
-    });
-  
-    const approvals = await NewsApproval.findAll({ where: { news_id } });
-    const totalWeight = approvals.reduce((acc, a) => acc + a.weight, 0);
-  
-    if (totalWeight >= 100) {
-      await NewsArticle.update({ status: 'approved' }, { where: { id: news_id } });
+      approved_at: null
     }
-  
-    res.status(201).json(success('Approval submitted', { approval, totalWeight }, 201));
   });
+
+  if (!approval) {
+    res.status(403).json(error('You are not currently assigned to approve this news'));
+    return;
+  }
+
+  // ✅ Tandai approved sekarang
+  approval.approved_at = new Date();
+  approval.note = req.body.note || null;
+  await approval.save();
+
+  // ✅ Hitung total bobot
+  const allApprovals = await NewsApproval.findAll({
+    where: { news_id, approved_at: { [Op.ne]: null } }
+  });
+
+  const totalWeight = allApprovals.reduce((sum, a) => sum + a.weight, 0);
+
+  // ✅ Ubah status berita jika bobot cukup
+  if (totalWeight >= 100) {
+    await NewsArticle.update({ status: 'approved' }, { where: { id: news_id } });
+  }
+
+  res.status(201).json(success('Approval submitted', { approval, totalWeight }, 201));
+});
   
 
 export const getApprovalsByNews = controllerHandler(async (req, res) => {
@@ -56,10 +53,101 @@ export const getApprovalsByNews = controllerHandler(async (req, res) => {
 
   const approvals = await NewsApproval.findAll({
     where: { news_id },
-    include: ['approver'] // pastikan model `NewsApproval` punya relasi ke User
+    include: ['approver']
   });
 
-  const totalWeight = approvals.reduce((sum, item) => sum + item.weight, 0);
+  const totalWeight = approvals
+    .filter(a => a.approved_at)
+    .reduce((sum, item) => sum + item.weight, 0);
 
-  res.json(success('Approval list', { approvals, totalWeight }));
+  const reasons = approvals
+    .filter(a => a.note && ['revisi', 'reject'].some(keyword => a.note.toLowerCase().includes(keyword)))
+    .map(a => ({ by: a.approver_id, note: a.note }));
+
+  res.json(success('Approval list', { approvals, totalWeight, reasons }));
 });
+
+
+
+export const rejectNews = controllerHandler(async (req, res) => {
+  const news_id = parseInt(req.params.news_id);
+  const approver_id = req.user?.id;
+
+  if (!approver_id) {
+    res.status(401).json(error('Unauthorized'));
+    return;
+  }
+
+  const approval = await NewsApproval.findOne({
+    where: { news_id, approver_id, approved_at: null }
+  });
+
+  if (!approval) {
+    res.status(403).json(error('You are not currently assigned to approve this news'));
+    return;
+  }
+
+  const note = req.body.note?.trim();
+  if (!note) {
+    res.status(400).json(error('Rejection note is required'));
+    return;
+  }
+
+  approval.approved_at = new Date();
+  approval.note = note;
+  await approval.save();
+
+  await NewsArticle.update({ status: 'rejected' }, { where: { id: news_id } });
+
+  res.status(200).json(success('News rejected with reason', approval));
+});
+
+
+export const checkExpiredApprovals = controllerHandler(async (_req, res) => {
+  const expiredApprovals = await NewsApproval.findAll({
+    where: {
+      approved_at: null,
+      assigned_at: {
+        [Op.lt]: new Date(Date.now() - 24 * 60 * 60 * 1000) // lebih dari 24 jam
+      }
+    }
+  });
+
+  let updated = 0;
+
+  for (const approval of expiredApprovals) {
+    const news = await NewsArticle.findByPk(approval.news_id);
+    if (!news) continue;
+
+    const supervisors = await UserSupervisor.findAll({
+      where: { employee_id: news.author_id },
+      order: [['priority_order', 'ASC']]
+    });
+
+    const current = supervisors.find(s => s.supervisor_id === approval.approver_id);
+    if (!current) continue;
+
+    const next = supervisors.find(s => s.priority_order > current.priority_order);
+    if (!next) continue;
+
+    const alreadyAssigned = await NewsApproval.findOne({
+      where: {
+        news_id: news.id,
+        approver_id: next.supervisor_id
+      }
+    });
+    if (alreadyAssigned) continue;
+
+    await NewsApproval.create({
+      news_id: news.id,
+      approver_id: next.supervisor_id,
+      weight: next.weight,
+      assigned_at: new Date()
+    });
+
+    updated++;
+  }
+
+  res.json(success('Expired approvals processed', { updated }));
+});
+

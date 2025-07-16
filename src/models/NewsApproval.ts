@@ -25,6 +25,9 @@ import {
   
     @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
     approved_at!: Date;
+
+    @Column({ type: DataType.DATE, defaultValue: DataType.NOW }) // ✅ Tambahan baru
+    assigned_at!: Date;
   
     @BelongsTo(() => NewsArticle)
     news!: NewsArticle;

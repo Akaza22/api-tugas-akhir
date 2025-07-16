@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { NewsArticle, User } from '../models';
+import { NewsArticle, User, UserSupervisor, NewsApproval } from '../models';
 import { success, error } from '../utils/response';
 import { controllerHandler } from '../utils/controllerHandler';
 
@@ -51,6 +51,22 @@ export const createNews = controllerHandler(async (req, res) => {
     author_id: req.user.id
   });
 
+    // 🔥 Tambahan: assign supervisor dengan priority_order = 1
+  const supervisors = await UserSupervisor.findAll({
+    where: { employee_id: req.user.id },
+    order: [['priority_order', 'ASC']]
+  });
+
+  if (supervisors.length > 0) {
+    const main = supervisors[0];
+    await NewsApproval.create({
+      news_id: news.id,
+      approver_id: main.supervisor_id,
+      weight: main.weight,
+      assigned_at: new Date() // ini wajib agar bisa dicek nanti 24 jam
+    });
+  }
+
   res.status(201).json(success('News created', news));
 });
 
@@ -99,4 +115,50 @@ export const deleteNews = controllerHandler(async (req, res) => {
   }
   await news.destroy();
   res.json(success('News deleted'));
+});
+
+export const reviseNews = controllerHandler(async (req: Request, res: Response) => {
+  const news_id = parseInt(req.params.id);
+  const user_id = req.user?.id;
+
+  const news = await NewsArticle.findByPk(news_id);
+  if (!news) {
+    res.status(404).json(error('News not found', null, 404));
+    return;
+  }
+
+  if (news.author_id !== user_id) {
+    res.status(403).json(error('Only the author can revise this news'));
+    return;
+  }
+
+  if (news.status !== 'rejected') {
+    res.status(400).json(error('Only rejected news can be revised'));
+    return;
+  }
+
+  // Reset status
+  news.status = 'pending';
+  await news.save();
+
+  // Hapus semua approval lama
+  await NewsApproval.destroy({ where: { news_id } });
+
+  // Assign ulang ke supervisor utama
+  const supervisors = await UserSupervisor.findAll({
+    where: { employee_id: user_id },
+    order: [['priority_order', 'ASC']]
+  });
+
+  if (supervisors.length > 0) {
+    const main = supervisors[0];
+    await NewsApproval.create({
+      news_id,
+      approver_id: main.supervisor_id,
+      weight: main.weight,
+      assigned_at: new Date()
+    });
+  }
+
+  res.json(success('News revised and resubmitted'));
 });

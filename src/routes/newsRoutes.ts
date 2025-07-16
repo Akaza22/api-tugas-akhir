@@ -10,6 +10,9 @@ import { authMiddleware } from '../middlewares/auth';
 import { validate } from '../middlewares/validation';
 import { body } from 'express-validator';
 import { uploadNewsFiles } from '../middlewares/uploadNewsFiles';
+import { reviseNews } from '../controllers/newsController';
+
+
 
 const router = Router();
 
@@ -41,5 +44,8 @@ router.put(
 );
 
 router.delete('/:id', authMiddleware, deleteNews);
+
+router.put('/:id/revise', authMiddleware, reviseNews);
+
 
 export default router;

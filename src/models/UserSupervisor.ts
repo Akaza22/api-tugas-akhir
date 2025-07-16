@@ -18,6 +18,9 @@ import {
   
     @Column({ type: DataType.INTEGER, allowNull: false })
     weight!: number;
+
+    @Column({ type: DataType.INTEGER, defaultValue: 1 })
+    priority_order!: number; 
   
     @BelongsTo(() => User, 'employee_id')
     employee!: User;
