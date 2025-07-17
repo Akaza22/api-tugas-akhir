@@ -38,9 +38,9 @@ export class NewsArticle extends Model {
   @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
   created_at!: Date;
 
-  @HasMany(() => NewsApproval)
+  @HasMany(() => NewsApproval, { foreignKey: 'news_id', as: 'approvals' })
   approvals!: NewsApproval[];
 
-  @HasMany(() => NewsComment)
+  @HasMany(() => NewsComment, { foreignKey: 'news_id', as: 'comments' })
   comments!: NewsComment[];
 }

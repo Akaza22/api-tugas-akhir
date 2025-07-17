@@ -4,10 +4,12 @@ import { authMiddleware } from '../middlewares/auth';
 
 const router = Router();
 
-router.post('/:news_id/approve', authMiddleware, approveNews);
-router.get('/:news_id', authMiddleware, getApprovalsByNews);
-router.post('/:news_id/reject', authMiddleware, rejectNews);
+
+router.get('/pending', authMiddleware, getPendingApprovals);         // ⬅️ pindah ke atas
 router.get('/check-expiry', checkExpiredApprovals);
-router.get('/pending', authMiddleware, getPendingApprovals);
+router.post('/:news_id/approve', authMiddleware, approveNews);
+router.post('/:news_id/reject', authMiddleware, rejectNews);
+router.get('/:news_id', authMiddleware, getApprovalsByNews);   
+
 
 export default router;

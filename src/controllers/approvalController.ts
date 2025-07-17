@@ -151,39 +151,41 @@ export const checkExpiredApprovals = controllerHandler(async (_req, res) => {
   res.json(success('Expired approvals processed', { updated }));
 });
 
-export const getPendingApprovals = controllerHandler(async (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.id;
+export const getPendingApprovals = controllerHandler(async (req, res) => {
+  const userId = req.user?.id;
 
-    if (!userId) {
-      res.status(401).json(error('Unauthorized'));
-      return;
-    } 
-
-    // Ambil berita yang belum sepenuhnya disetujui (total bobot < 100)
-    const pending = await NewsArticle.findAll({
-      include: [
-        {
-          model: NewsApproval,
-          attributes: ['approver_id', 'weight']
-        },
-        {
-          model: User,
-          as: 'author',
-          attributes: ['fullname']
-        }
-      ]
-    });
-
-    // Hitung total bobot approval
-    const filtered = pending.filter((news) => {
-      const total = news.approvals.reduce((acc, curr) => acc + curr.weight, 0);
-      return total < 100;
-    });
-
-    res.json(success('Pending approvals fetched', filtered));
-  } catch (err) {
-    console.error(err);
-    res.status(500).json(error('Failed to fetch pending approvals', err));
+  if (!userId) {
+    res.status(401).json(error('Unauthorized'));
+    return;
   }
+
+  // Ambil semua berita yang status-nya masih pending
+  const articles = await NewsArticle.findAll({
+    where: { status: 'pending' },
+    include: [
+      {
+        model: NewsApproval,
+        as: 'approvals',
+        attributes: ['approver_id', 'weight', 'approved_at'],
+      },
+      {
+        model: User,
+        as: 'author',
+        attributes: ['fullname'],
+      }
+    ]
+  });
+
+  // Filter berita yang total bobot approval < 100
+  const pending = articles.filter((news) => {
+    const approvals = news.approvals || [];
+    const total = approvals
+      .filter(a => a.approved_at !== null)
+      .reduce((sum, a) => sum + a.weight, 0);
+    return total < 100;
+  });
+
+  res.json(success('Pending approvals fetched', pending));
 });
+
+
