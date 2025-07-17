@@ -8,7 +8,7 @@ export const seedNews = async () => {
     title: 'News from Reporter 1',
     content: 'Test content 1',
     author_id: users.reporter1.id,
-    status: 'pending',
+    status: 'approved',
   });
 
   news.news2 = await NewsArticle.create({

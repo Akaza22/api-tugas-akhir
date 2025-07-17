@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { controllerHandler } from '../utils/controllerHandler';
-import { NewsApproval, NewsArticle, UserSupervisor } from '../models';
+import { NewsApproval, NewsArticle, UserSupervisor, User } from '../models';
 import { success, error } from '../utils/response';
 import { Op } from 'sequelize';
 
@@ -151,3 +151,39 @@ export const checkExpiredApprovals = controllerHandler(async (_req, res) => {
   res.json(success('Expired approvals processed', { updated }));
 });
 
+export const getPendingApprovals = controllerHandler(async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json(error('Unauthorized'));
+      return;
+    } 
+
+    // Ambil berita yang belum sepenuhnya disetujui (total bobot < 100)
+    const pending = await NewsArticle.findAll({
+      include: [
+        {
+          model: NewsApproval,
+          attributes: ['approver_id', 'weight']
+        },
+        {
+          model: User,
+          as: 'author',
+          attributes: ['fullname']
+        }
+      ]
+    });
+
+    // Hitung total bobot approval
+    const filtered = pending.filter((news) => {
+      const total = news.approvals.reduce((acc, curr) => acc + curr.weight, 0);
+      return total < 100;
+    });
+
+    res.json(success('Pending approvals fetched', filtered));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json(error('Failed to fetch pending approvals', err));
+  }
+});
