@@ -3,6 +3,7 @@ import { controllerHandler } from '../utils/controllerHandler';
 import { NewsApproval, NewsArticle, UserSupervisor, User } from '../models';
 import { success, error } from '../utils/response';
 import { Op } from 'sequelize';
+import { assignNextSupervisor } from '../utils/assignNextSupervisor';
 
 export const approveNews = controllerHandler(async (req, res) => {
   const news_id = parseInt(req.params.news_id);
@@ -38,6 +39,9 @@ export const approveNews = controllerHandler(async (req, res) => {
   approval.approved_at = new Date();
   approval.note = typeof req.body === 'object' ? req.body.note ?? null : null;
   await approval.save();
+  await assignNextSupervisor(news_id, approver_id);
+
+  
 
   // ✅ Hitung total bobot
   const allApprovals = await NewsApproval.findAll({
@@ -132,7 +136,8 @@ export const checkExpiredApprovals = controllerHandler(async (_req, res) => {
   for (const approval of expiredApprovals) {
     const news = await NewsArticle.findByPk(approval.news_id);
     if (!news) continue;
-
+    await assignNextSupervisor(news.id, approval.approver_id);
+    updated++;
     const supervisors = await UserSupervisor.findAll({
       where: { employee_id: news.author_id },
       order: [['priority_order', 'ASC']]
