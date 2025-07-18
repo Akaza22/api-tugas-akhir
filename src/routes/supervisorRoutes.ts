@@ -11,7 +11,7 @@ import { body, param } from 'express-validator';
 
 const router = Router();
 
-router.use(authMiddleware, requireRole(['admin']));
+router.use(authMiddleware);
 
 router.get('/:employee_id',
   param('employee_id').isNumeric().withMessage('Employee ID must be numeric'),

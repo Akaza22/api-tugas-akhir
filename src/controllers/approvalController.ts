@@ -53,7 +53,13 @@ export const getApprovalsByNews = controllerHandler(async (req, res) => {
 
   const approvals = await NewsApproval.findAll({
     where: { news_id },
-    include: ['approver']
+    include: [
+      {
+        model: User,
+        as: 'approver',
+        attributes: ['id', 'fullname'],
+      }
+    ]
   });
 
   const totalWeight = approvals
@@ -66,6 +72,7 @@ export const getApprovalsByNews = controllerHandler(async (req, res) => {
 
   res.json(success('Approval list', { approvals, totalWeight, reasons }));
 });
+
 
 
 
