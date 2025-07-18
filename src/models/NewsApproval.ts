@@ -20,10 +20,10 @@ export class NewsApproval extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   weight!: number;
 
-  @Column(DataType.TEXT)
+  @Column({ type: DataType.TEXT, allowNull: true })
   note!: string;
 
-  @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
+  @Column({ type: DataType.DATE, defaultValue: null })
   approved_at!: Date;
 
   @Column({ type: DataType.DATE, defaultValue: DataType.NOW })

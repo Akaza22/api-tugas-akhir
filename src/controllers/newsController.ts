@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { NewsArticle, User, UserSupervisor, NewsApproval } from '../models';
 import { success, error } from '../utils/response';
 import { controllerHandler } from '../utils/controllerHandler';
+import { sequelize } from '../config/database';
 
 export const getAllNews = controllerHandler(async (_req, res) => {
   const news = await NewsArticle.findAll({ include: [User] });
@@ -18,57 +19,69 @@ export const getNewsById = controllerHandler(async (req, res) => {
 });
 
 export const createNews = controllerHandler(async (req, res) => {
-  const { title, content } = req.body;
+  // 2. Mulai transaksi terkelola
+  try {
+    await sequelize.transaction(async (t) => {
+      const { title, content } = req.body;
 
-  if (!req.user) {
-    res.status(401).json(error('Unauthorized', null, 401));
-    return;
-  }
+      if (!req.user) {
+        // Kita lempar error agar transaksi di-rollback
+        throw { status: 401, message: 'Unauthorized' };
+      }
 
-  const files = req.files as {
-    banner?: Express.Multer.File[];
-    pdf?: Express.Multer.File[];
-  };
-  const bannerFile = files.banner?.[0];
-  const pdfFile = files.pdf?.[0];
+      const files = req.files as {
+        banner?: Express.Multer.File[];
+        pdf?: Express.Multer.File[];
+      };
+      const bannerFile = files.banner?.[0];
+      const pdfFile = files.pdf?.[0];
 
-  if (bannerFile && !['image/jpeg', 'image/png'].includes(bannerFile.mimetype)) {
-    res.status(400).json(error('Invalid banner format. Only JPG/PNG allowed.'));
-    return;
-  }
+      // Validasi file...
+      if (bannerFile && !['image/jpeg', 'image/png'].includes(bannerFile.mimetype)) {
+        throw { status: 400, message: 'Invalid banner format. Only JPG/PNG allowed.' };
+      }
+      if (pdfFile && pdfFile.mimetype !== 'application/pdf') {
+        throw { status: 400, message: 'Invalid file format. Only PDF allowed.' };
+      }
 
-  if (pdfFile && pdfFile.mimetype !== 'application/pdf') {
-    res.status(400).json(error('Invalid file format. Only PDF allowed.'));
-    return;
-  }
+      // 3. Gunakan transaksi (t) untuk setiap operasi database
+      const news = await NewsArticle.create({
+        title,
+        content: content || null,
+        pdf_url: pdfFile?.path ?? null,
+        banner_url: bannerFile?.path ?? null,
+        summary: null,
+        author_id: req.user.id
+      }, { transaction: t });
 
-  const news = await NewsArticle.create({
-    title,
-    content: content || null,
-    pdf_url: pdfFile?.path ?? null,
-    banner_url: bannerFile?.path ?? null,
-    summary: null,
-    author_id: req.user.id
-  });
+      const supervisors = await UserSupervisor.findAll({
+        where: { employee_id: req.user.id },
+        order: [['priority_order', 'ASC']],
+        transaction: t // Gunakan transaksi di sini juga
+      });
 
-    // 🔥 Tambahan: assign supervisor dengan priority_order = 1
-  const supervisors = await UserSupervisor.findAll({
-    where: { employee_id: req.user.id },
-    order: [['priority_order', 'ASC']]
-  });
+      if (supervisors.length > 0) {
+        const main = supervisors[0];
+        await NewsApproval.create({
+          news_id: news.id,
+          approver_id: main.supervisor_id,
+          weight: main.weight,
+          assigned_at: new Date()
+        }, { transaction: t }); // Dan di sini juga
+      }
 
-  if (supervisors.length > 0) {
-    const main = supervisors[0];
-    await NewsApproval.create({
-      news_id: news.id,
-      approver_id: main.supervisor_id,
-      weight: main.weight,
-      assigned_at: new Date() // ini wajib agar bisa dicek nanti 24 jam
+      // 4. Kirim respons HANYA SETELAH transaksi berhasil
+      // Jika kita sampai di sini, artinya semua operasi di atas berhasil.
+      // Sequelize akan otomatis melakukan COMMIT saat blok ini selesai.
+      res.status(201).json(success('News created', news));
     });
+  } catch (err: any) {
+    // Menangkap error yang kita lempar (throw) atau error database lainnya
+    console.error("TRANSACTION FAILED:", err);
+    res.status(err.status || 500).json(error(err.message || 'Internal Server Error'));
   }
-
-  res.status(201).json(success('News created', news));
 });
+
 
 
 export const updateNews = controllerHandler(async (req, res) => {

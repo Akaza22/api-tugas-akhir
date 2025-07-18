@@ -8,6 +8,12 @@ export const approveNews = controllerHandler(async (req, res) => {
   const news_id = parseInt(req.params.news_id);
   const approver_id = req.user?.id;
 
+  // =================== TAMBAHKAN LOG DI SINI ===================
+  console.log(`\n--- approvalController: approveNews ---`);
+  console.log(`Mencoba approve news_id: ${news_id}`);
+  console.log(`ID APPROVER YANG MENCOBA: ${approver_id}`); // <-- Log paling penting
+  // =============================================================
+
   if (!approver_id) {
     res.status(401).json(error('Unauthorized'));
     return;
@@ -23,13 +29,14 @@ export const approveNews = controllerHandler(async (req, res) => {
   });
 
   if (!approval) {
+    console.log(`GAGAL: Tidak ditemukan tugas approval untuk news_id=${news_id} dan approver_id=${approver_id}`);
     res.status(403).json(error('You are not currently assigned to approve this news'));
     return;
   }
 
   // ✅ Tandai approved sekarang
   approval.approved_at = new Date();
-  approval.note = req.body.note || null;
+  approval.note = typeof req.body === 'object' ? req.body.note ?? null : null;
   await approval.save();
 
   // ✅ Hitung total bobot
