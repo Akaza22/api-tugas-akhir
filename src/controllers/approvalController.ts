@@ -186,6 +186,13 @@ export const getPendingApprovals = controllerHandler(async (req, res) => {
         model: NewsApproval,
         as: 'approvals',
         attributes: ['approver_id', 'weight', 'approved_at'],
+        include: [
+          {
+            model: User,
+            as: 'approver',
+            attributes: ['fullname']
+          }
+        ]
       },
       {
         model: User,
