@@ -5,7 +5,8 @@ import { controllerHandler } from '../utils/controllerHandler';
 import { sequelize } from '../config/database';
 import axios from 'axios';
 import pdfParse from 'pdf-parse';
-import extractText from 'pdf-text-extract';
+import { summarizePdfWithPython } from '../utils/pythonSummarizer';
+
 
 
 export const getAllNews = controllerHandler(async (_req, res) => {
@@ -48,29 +49,54 @@ export const createNews = controllerHandler(async (req, res) => {
         throw { status: 400, message: 'Invalid file format. Only PDF allowed.' };
       }
 
+      // let summary: string | null = null;
+      // if (pdfFile) {
+      //   const pdfUrl = pdfFile.path;
+
+      //   try {
+      //     const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+      //     const pdfBuffer = response.data;
+
+      //     const parsed = await pdfParse(pdfBuffer);
+      //     const fullText = parsed.text;
+
+      //     const sentences = fullText
+      //       .split('.')
+      //       .map((s: string) => s.trim())
+      //       .filter(Boolean);
+
+      //     summary = sentences.slice(0, 3).join('. ') + '.';
+      //   } catch (err) {
+      //     console.warn('Failed to extract summary from PDF, skipping summary:', err);
+      //     summary = null;
+      //   }
+      // }
+
       let summary: string | null = null;
-      if (pdfFile) {
+      if (pdfFile?.path) {
         const pdfUrl = pdfFile.path;
 
-        try {
-          const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
-          const pdfBuffer = response.data;
+        // coba pakai python textrank
+        summary = await summarizePdfWithPython(pdfUrl, 3);
 
-          const parsed = await pdfParse(pdfBuffer);
-          const fullText = parsed.text;
-
-          const sentences = fullText
-            .split('.')
-            .map((s: string) => s.trim())
-            .filter(Boolean);
-
-          summary = sentences.slice(0, 3).join('. ') + '.';
-        } catch (err) {
-          console.warn('Failed to extract summary from PDF, skipping summary:', err);
-          summary = null;
+        // fallback JS sederhana kalau gagal
+        if (!summary) {
+          try {
+            const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+            const pdfBuffer = response.data;
+            const parsed = await pdfParse(pdfBuffer);
+            const fullText = parsed.text ?? '';
+            const sentences = fullText
+              .split(/[.!?]/g)
+              .map((s: string) => s.trim())
+              .filter(Boolean);
+            summary = sentences.slice(0, 3).join('. ') + '.';
+          } catch (err) {
+            console.warn('Fallback summary failed:', err);
+            summary = null;
+          }
         }
       }
-
 
 
 
