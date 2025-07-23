@@ -181,28 +181,27 @@ export const reviseNews = controllerHandler(async (req: Request, res: Response) 
     return;
   }
 
-  // Reset status
   news.status = 'pending';
   await news.save();
 
-  // Hapus semua approval lama
   await NewsApproval.destroy({ where: { news_id } });
 
-  // Assign ulang ke supervisor utama
   const supervisors = await UserSupervisor.findAll({
     where: { employee_id: user_id },
     order: [['priority_order', 'ASC']]
   });
 
   if (supervisors.length > 0) {
-    const main = supervisors[0];
-    await NewsApproval.create({
+    const approvalsToCreate = supervisors.map(s => ({
       news_id,
-      approver_id: main.supervisor_id,
-      weight: main.weight,
+      approver_id: s.supervisor_id,
+      weight: s.weight,
       assigned_at: new Date()
-    });
+    }));
+    await NewsApproval.bulkCreate(approvalsToCreate);
   }
 
-  res.json(success('News revised and resubmitted'));
+  res.json(success('News revised and resubmitted')); // ✅ No return
 });
+
+
