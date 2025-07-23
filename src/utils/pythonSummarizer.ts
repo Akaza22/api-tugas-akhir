@@ -5,7 +5,7 @@ export async function summarizePdfWithPython(pdfUrl: string, sentences = 3): Pro
   return new Promise((resolve) => {
     // Path ke summarizer.py relatif ke berkas TS yang dikompilasi.
     // __dirname saat runtime (dist), jadi lompat ke ../python
-    const scriptPath = path.join(__dirname, '..', '..', 'python', 'summarizer.py');
+    const scriptPath = path.join(__dirname, '..', '..', 'python3', 'summarizer.py');
 
     const py = execFile(
       'python',                // Atau 'python' di Windows (cek env)
