@@ -91,13 +91,14 @@ export const createNews = controllerHandler(async (req, res) => {
       });
 
       if (supervisors.length > 0) {
-        const main = supervisors[0];
-        await NewsApproval.create({
+        const approvalsToCreate = supervisors.map(s => ({
           news_id: news.id,
-          approver_id: main.supervisor_id,
-          weight: main.weight,
+          approver_id: s.supervisor_id,
+          weight: s.weight,
           assigned_at: new Date()
-        }, { transaction: t }); // Dan di sini juga
+        }));
+
+        await NewsApproval.bulkCreate(approvalsToCreate, { transaction: t });
       }
 
       // 4. Kirim respons HANYA SETELAH transaksi berhasil
