@@ -54,7 +54,7 @@ export const createNews = controllerHandler(async (req, res) => {
         const pdfUrl = pdfFile.path;
 
         // coba pakai python textrank
-        summary = await summarizePdfWithPython(pdfUrl, 10);
+        summary = await summarizePdfWithPython(pdfUrl, 5);
 
         // fallback JS sederhana kalau gagal
         if (!summary) {
