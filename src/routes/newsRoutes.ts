@@ -46,7 +46,15 @@ router.put(
 
 router.delete('/:id', authMiddleware, deleteNews);
 
-router.put('/:id/revise', authMiddleware, reviseNews);
-
+router.put(
+  '/:id/revise', 
+  authMiddleware,
+  uploadNewsFiles,
+  [
+    body('title').notEmpty().withMessage('Title is required')
+  ],
+  validate,
+  reviseNews
+);
 
 export default router;
